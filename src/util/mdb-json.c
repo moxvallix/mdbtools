@@ -28,9 +28,9 @@
 
 static char *quote_char = "\"";
 static char *escape_char = "\\";
-static char *separator_char = ":";
-static char *row_start = "{";
-static char *row_end = "}\n";
+static char *separator_char = ": ";
+static char *row_start = "  {";
+static char *row_end = "\n  }";
 static char *delimiter = ",";
 static size_t quote_len = 1; //strlen(quote_char); /* multibyte */
 static size_t orig_escape_len = 1; //strlen(escape_char);
@@ -74,7 +74,7 @@ print_quoted_value(FILE *outfile, char* value, int bin_len) {
 
 static void
 print_binary_value(FILE *outfile, char const * value, int bin_len) {
-	fputs("{\"$binary\": \"", outfile);
+	fputs("{\n      \"$binary\": \"", outfile);
 	size_t const base64_buf_len = (bin_len / 3 + 1) * 4 + 1;
 	char * base64_buf = g_malloc(base64_buf_len);
 	if (base64encode(value, bin_len, base64_buf, base64_buf_len) != 0) {
@@ -82,11 +82,12 @@ print_binary_value(FILE *outfile, char const * value, int bin_len) {
 	}
 	fputs(base64_buf, outfile);
 	g_free(base64_buf);
-	fputs("\", \"$type\": \"00\"}", outfile);
+	fputs("\",\n      \"$type\": \"00\"\n    }", outfile);
 }
 
 static void
 print_col(FILE *outfile, char* col_name, gchar *col_val, int col_type, int bin_len) {
+	fputs("    ", outfile);
 	print_quoted_value(outfile, col_name, -1);
 	fputs(separator_char, outfile);
 	if (is_quote_type(col_type)) {
@@ -195,7 +196,14 @@ main(int argc, char **argv)
 		}
 	}
 
+	fputs("[", outfile);
+	int add_delimiter2 = 0;
 	while(mdb_fetch_row(table)) {
+		if (add_delimiter2) {
+			fputs(delimiter, outfile);
+			add_delimiter2 = 0;
+		}
+		fputs("\n", outfile);
 		fputs(row_start, outfile);
 		int add_delimiter = 0;
 		for (i=0;i<table->num_cols;i++) {
@@ -205,6 +213,7 @@ main(int argc, char **argv)
 					fputs(delimiter, outfile);
 					add_delimiter = 0;
 				}
+				fputs("\n", outfile);
 
 				if (col->col_type == MDB_OLE) {
 					value = mdb_ole_read_full(mdb, col, &length);
@@ -219,7 +228,9 @@ main(int argc, char **argv)
 			}
 		}
 		fputs(row_end, outfile);
+		add_delimiter2 = 1;
 	}
+	fputs("\n]\n", outfile);
 
 	/* free the memory used to bind */
 	for (i=0;i<table->num_cols;i++) {
